@@ -13,6 +13,7 @@ dist
 checkpoints_test
 logs/
 third_party
+LivePortrait_original/
 
 # Heavy binary dependencies & compiled models
 *.engine
