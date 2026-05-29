@@ -1,0 +1,24 @@
+__pycache__
+.idea
+*.pyc
+.DS_Store
+checkpoints/
+results/
+venv/
+env/
+*.egg-info
+build
+dist
+*.eg
+checkpoints_test
+logs/
+third_party
+
+# Heavy binary dependencies & compiled models
+*.engine
+*.trt
+*.whl
+*.zip
+*.tar
+*.gz
+video_frames/
