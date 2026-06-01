@@ -52,6 +52,10 @@ app_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(app_dir)
 
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
+from virtual_cam_helper import VirtualCameraStreamer
+
+# Initialize the virtual camera streamer
+vcam_streamer = VirtualCameraStreamer(width=640, height=480, fps=30)
 
 # Parse command line args
 parser = argparse.ArgumentParser(description='Faster Live Portrait Camera WebUI')
@@ -232,11 +236,42 @@ def sync_process_webcam_frame(webcam_frame, flag_pasteback, flag_stitching, flag
         
     return last_output_frame.copy()
 
+# Event handlers for Virtual Camera
+def on_virtual_cam_toggle(enable, width, height, fps):
+    if enable:
+        vcam_streamer.width = int(width)
+        vcam_streamer.height = int(height)
+        vcam_streamer.fps = int(fps)
+        success = vcam_streamer.start()
+        if success:
+            return f"🟢 Connected to virtual camera successfully: {vcam_streamer.cam.device}"
+        else:
+            return (
+                f"❌ Connection failed: {vcam_streamer.last_error}\n\n"
+                f"💡 Setup Tip: If the virtual camera driver is not installed, please run 'install_driver.bat' as Administrator."
+            )
+    else:
+        vcam_streamer.stop()
+        return "⚪ Virtual camera stream stopped / disconnected."
+
+def on_dimension_change(width, height, fps):
+    if vcam_streamer.running:
+        vcam_streamer.stop()
+        vcam_streamer.width = int(width)
+        vcam_streamer.height = int(height)
+        vcam_streamer.fps = int(fps)
+        success = vcam_streamer.start()
+        if success:
+            return f"🟢 Reconnected virtual camera with size {width}x{height}."
+        else:
+            return f"❌ Size update failed: {vcam_streamer.last_error}"
+    return "ℹ️ Settings saved. Enable the virtual camera stream to begin."
+
 import threading
 processing_lock = threading.Lock()
 
 # Asynchronous event handler for Gradio stream
-async def process_webcam_frame(webcam_frame, flag_pasteback, flag_stitching, flag_relative_motion, scale_down_ratio, flag_crop_driving_video, det_thresh, smooth_factor):
+async def process_webcam_frame(webcam_frame, flag_pasteback, flag_stitching, flag_relative_motion, scale_down_ratio, flag_crop_driving_video, det_thresh, smooth_factor, enable_vcam):
     global last_output_frame, last_process_time
     
     if webcam_frame is None:
@@ -273,6 +308,10 @@ async def process_webcam_frame(webcam_frame, flag_pasteback, flag_stitching, fla
         if out_frame is None:
             return fallback_frame.copy()
         
+        # Pipe the frame directly to the virtual camera in the background if enabled
+        if enable_vcam and vcam_streamer.running:
+            vcam_streamer.send_frame(out_frame)
+            
         return out_frame
     except Exception as e:
         traceback.print_exc()
@@ -421,6 +460,15 @@ with gr.Blocks() as demo:
                 det_thresh_slider = gr.Slider(minimum=0.1, maximum=1.0, step=0.05, value=0.5, label="Face Detection Threshold (Lower = Less picky)")
                 smooth_factor_slider = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, value=0.3, label="Tracking Smooth Factor / Beta (Lower = More smoothing)")
                 
+            with gr.Accordion("🎥 Direct Virtual Camera Streamer", open=True):
+                enable_vcam_checkbox = gr.Checkbox(value=False, label="⚡ Enable Direct Virtual Webcam Streaming")
+                vcam_status = gr.Textbox(value="⚪ Virtual Camera IDLE", label="Driver Connection Status", interactive=False)
+                with gr.Accordion("⚙️ Driver Resolution & FPS Adjustments", open=False):
+                    vcam_w = gr.Dropdown(choices=["320", "512", "640", "1280"], value="640", label="Stream Width")
+                    vcam_h = gr.Dropdown(choices=["240", "512", "480", "720"], value="480", label="Stream Height")
+                    vcam_fps = gr.Slider(minimum=15, maximum=60, step=5, value=30, label="Target FPS")
+                    apply_vcam_settings_btn = gr.Button("Apply Resolution Settings")
+                    
             with gr.Accordion("⚙️ Backend Engine Configs (Requires Reload)", open=False):
                 mode_radio = gr.Radio(choices=["onnx", "trt", "pytorch"], value=current_mode, label="Model Engine Mode")
                 use_mp_checkbox = gr.Checkbox(value=current_use_mp, label="Use MediaPipe Face Detector")
@@ -453,6 +501,20 @@ with gr.Blocks() as demo:
         outputs=[status_output]
     )
     
+    # Toggle virtual camera stream
+    enable_vcam_checkbox.change(
+        fn=on_virtual_cam_toggle,
+        inputs=[enable_vcam_checkbox, vcam_w, vcam_h, vcam_fps],
+        outputs=[vcam_status]
+    )
+    
+    # Apply virtual camera setting adjustments
+    apply_vcam_settings_btn.click(
+        fn=on_dimension_change,
+        inputs=[vcam_w, vcam_h, vcam_fps],
+        outputs=[vcam_status]
+    )
+    
     # Real-Time Image Stream processing
     webcam_input.stream(
         fn=process_webcam_frame,
@@ -464,7 +526,8 @@ with gr.Blocks() as demo:
             downsample_slider,
             do_crop_checkbox,
             det_thresh_slider,
-            smooth_factor_slider
+            smooth_factor_slider,
+            enable_vcam_checkbox
         ],
         outputs=[processed_output],
         show_progress="none",
