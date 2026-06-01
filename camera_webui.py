@@ -237,12 +237,12 @@ def sync_process_webcam_frame(webcam_frame, flag_pasteback, flag_stitching, flag
     return last_output_frame.copy()
 
 # Event handlers for Virtual Camera
-def on_virtual_cam_toggle(enable, width, height, fps):
+def on_virtual_cam_toggle(enable, width, height, fps, device):
     if enable:
         vcam_streamer.width = int(width)
         vcam_streamer.height = int(height)
         vcam_streamer.fps = int(fps)
-        success = vcam_streamer.start()
+        success = vcam_streamer.start(device=device)
         if success:
             return f"🟢 Connected to virtual camera successfully: {vcam_streamer.cam.device}"
         else:
@@ -254,13 +254,13 @@ def on_virtual_cam_toggle(enable, width, height, fps):
         vcam_streamer.stop()
         return "⚪ Virtual camera stream stopped / disconnected."
 
-def on_dimension_change(width, height, fps):
+def on_dimension_change(width, height, fps, device):
     if vcam_streamer.running:
         vcam_streamer.stop()
         vcam_streamer.width = int(width)
         vcam_streamer.height = int(height)
         vcam_streamer.fps = int(fps)
-        success = vcam_streamer.start()
+        success = vcam_streamer.start(device=device)
         if success:
             return f"🟢 Reconnected virtual camera with size {width}x{height}."
         else:
@@ -462,6 +462,7 @@ with gr.Blocks() as demo:
                 
             with gr.Accordion("🎥 Direct Virtual Camera Streamer", open=True):
                 enable_vcam_checkbox = gr.Checkbox(value=False, label="⚡ Enable Direct Virtual Webcam Streaming")
+                vcam_device = gr.Dropdown(choices=["Unity Video Capture", "OBS Virtual Camera"], value="Unity Video Capture", label="Select Virtual Camera Device")
                 vcam_status = gr.Textbox(value="⚪ Virtual Camera IDLE", label="Driver Connection Status", interactive=False)
                 with gr.Accordion("⚙️ Driver Resolution & FPS Adjustments", open=False):
                     vcam_w = gr.Dropdown(choices=["320", "512", "640", "1280"], value="640", label="Stream Width")
@@ -504,14 +505,14 @@ with gr.Blocks() as demo:
     # Toggle virtual camera stream
     enable_vcam_checkbox.change(
         fn=on_virtual_cam_toggle,
-        inputs=[enable_vcam_checkbox, vcam_w, vcam_h, vcam_fps],
+        inputs=[enable_vcam_checkbox, vcam_w, vcam_h, vcam_fps, vcam_device],
         outputs=[vcam_status]
     )
     
     # Apply virtual camera setting adjustments
     apply_vcam_settings_btn.click(
         fn=on_dimension_change,
-        inputs=[vcam_w, vcam_h, vcam_fps],
+        inputs=[vcam_w, vcam_h, vcam_fps, vcam_device],
         outputs=[vcam_status]
     )
     

@@ -34,7 +34,7 @@ class VirtualCameraStreamer:
         """Returns True if the pyvirtualcam package is installed."""
         return PYVIRTUALCAM_AVAILABLE
 
-    def start(self):
+    def start(self, device=None):
         """Starts the virtual camera backend and background sender thread."""
         with self.lock:
             if self.running:
@@ -45,18 +45,35 @@ class VirtualCameraStreamer:
                 print(f"[VirtualCamera] {self.last_error}")
                 return False
 
+            # Map the high-level device name to corresponding pyvirtualcam backend and device name
+            backend = None
+            resolved_device = None
+            
+            if device:
+                device_lower = device.lower()
+                if "unity" in device_lower or "swapface" in device_lower:
+                    backend = "unitycapture"
+                    resolved_device = None
+                elif "obs" in device_lower:
+                    backend = "obs"
+                    resolved_device = None
+                else:
+                    resolved_device = device
+
             try:
-                # Initialize pyvirtualcam (will search for installed virtual webcams like Unity Capture or OBS)
+                # Initialize pyvirtualcam
                 self.cam = pyvirtualcam.Camera(
                     width=self.width, 
                     height=self.height, 
-                    fps=self.fps
+                    fps=self.fps,
+                    device=resolved_device,
+                    backend=backend
                 )
-                print(f"[VirtualCamera] Successfully opened device: {self.cam.device}")
+                print(f"[VirtualCamera] Successfully opened device: {self.cam.device} using backend: {backend if backend else 'auto'}")
                 self.last_error = ""
             except Exception as e:
                 self.last_error = (
-                    f"No virtual camera device detected (e.g., Unity Video Capture is not active/installed). "
+                    f"No virtual camera device detected matching: '{device if device else 'Any'}'. "
                     f"Details: {str(e)}"
                 )
                 print(f"[VirtualCamera] {self.last_error}")
