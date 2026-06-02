@@ -21,7 +21,7 @@ class WarpingSpadePyTorchModel(BaseModel):
         self.cudaStream = torch.cuda.current_stream().cuda_stream if torch.cuda.is_available() else None
         
         # Load the models config
-        config_path = os.path.join(os.path.dirname(__file__), '../../LivePortrait_original/src/config/models.yaml')
+        config_path = os.path.join(os.path.dirname(__file__), '../../configs/models.yaml')
         with open(config_path, 'r') as f:
             models_config = yaml.safe_load(f)['model_params']
             
