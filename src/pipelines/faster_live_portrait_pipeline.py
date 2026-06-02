@@ -17,8 +17,7 @@ import torch
 
 from .. import models
 from ..utils.crop import crop_image, parse_bbox_from_landmark, crop_image_by_bbox, paste_back, paste_back_pytorch
-from ..utils.utils import resize_to_limit, prepare_paste_back, get_rotation_matrix, calc_lip_close_ratio, \
-    calc_eye_close_ratio, transform_keypoint, concat_feat
+from ..utils.utils import resize_to_limit, prepare_paste_back, get_rotation_matrix, calc_lip_close_ratio, calc_eye_close_ratio, calc_eye_close_ratio_animal, calc_lip_close_ratio_animal, transform_keypoint, concat_feat
 from src.utils import utils
 
 
@@ -68,7 +67,7 @@ class FasterLivePortraitPipeline:
             self.model_dict = {}
             for model_name, model_config in self.cfg.models.items():
                 print(f"loading model: {model_name}")
-                
+                    
                 if model_config is None:
                     if model_name == "warping_spade":
                         model_config = {
@@ -122,17 +121,23 @@ class FasterLivePortraitPipeline:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     def calc_combined_eye_ratio(self, c_d_eyes_i, source_lmk):
-        c_s_eyes = calc_eye_close_ratio(source_lmk[None])
+        # Source-side eye ratio depends on landmark schema (106 human vs 9 animal)
+        if self.is_animal:
+            c_s_eyes = calc_eye_close_ratio_animal(source_lmk[None])
+        else:
+            c_s_eyes = calc_eye_close_ratio(source_lmk[None])
         c_d_eyes_i = np.array(c_d_eyes_i).reshape(1, 1)
-        # [c_s,eyes, c_d,eyes,i]
         combined_eye_ratio_tensor = np.concatenate([c_s_eyes, c_d_eyes_i], axis=1)
         return combined_eye_ratio_tensor
 
     def calc_combined_lip_ratio(self, c_d_lip_i, source_lmk):
-        c_s_lip = calc_lip_close_ratio(source_lmk[None])
-        c_d_lip_i = np.array(c_d_lip_i).reshape(1, 1)  # 1x1
-        # [c_s,lip, c_d,lip,i]
-        combined_lip_ratio_tensor = np.concatenate([c_s_lip, c_d_lip_i], axis=1)  # 1x2
+        # Source-side lip ratio depends on landmark schema (106 human vs 9 animal)
+        if self.is_animal:
+            c_s_lip = calc_lip_close_ratio_animal(source_lmk[None])
+        else:
+            c_s_lip = calc_lip_close_ratio(source_lmk[None])
+        c_d_lip_i = np.array(c_d_lip_i).reshape(1, 1)
+        combined_lip_ratio_tensor = np.concatenate([c_s_lip, c_d_lip_i], axis=1)
         return combined_lip_ratio_tensor
 
     def prepare_source(self, source_path, **kwargs):
@@ -474,6 +479,34 @@ class FasterLivePortraitPipeline:
                     if self.cfg.infer_params.flag_stitching:
                         x_d_i_new = self.stitching(x_s, x_d_i_new)
             else:
+                # Animal path: apply eye/lip retargeting if enabled, then stitching.
+                # NOTE: For animals we apply retargeting ADDITIVELY to the already-
+                # transformed x_d_i_new, not by replacing it as the human branch
+                # does for flag_relative_motion. Replacing would discard the driver
+                # pose (R_new, t_new, delta_new) that we just computed.
+                eyes_delta, lip_delta = None, None
+
+                if self.cfg.infer_params.flag_eye_retargeting and source_lmk is not None:
+                    # input_eye_ratio has shape (1, 2) [left_close, right_close];
+                    # the retargeting model expects a single scalar driving value.
+                    # We take the mean of both eyes as the driving close-state signal.
+                    c_d_eyes_i = [float(np.mean(input_eye_ratio))]
+                    combined_eye_ratio_tensor = self.calc_combined_eye_ratio(c_d_eyes_i, source_lmk)
+                    eyes_delta = self.retarget_eye(x_s, combined_eye_ratio_tensor)
+
+                if self.cfg.infer_params.flag_lip_retargeting and source_lmk is not None:
+                    # input_lip_ratio has shape (1, 1) already, but unwrap to scalar list
+                    # for consistency with the reshape(1,1) inside calc_combined_lip_ratio.
+                    c_d_lip_i = [float(input_lip_ratio.flatten()[0])]
+                    combined_lip_ratio_tensor = self.calc_combined_lip_ratio(c_d_lip_i, source_lmk)
+                    lip_delta = self.retarget_lip(x_s, combined_lip_ratio_tensor)
+
+                # Additive application (preserves driver pose)
+                if eyes_delta is not None:
+                    x_d_i_new = x_d_i_new + eyes_delta.reshape(-1, x_s.shape[1], 3)
+                if lip_delta is not None:
+                    x_d_i_new = x_d_i_new + lip_delta.reshape(-1, x_s.shape[1], 3)
+
                 if self.cfg.infer_params.flag_stitching:
                     x_d_i_new = self.stitching(x_s, x_d_i_new)
 

@@ -143,6 +143,63 @@ def calc_lip_close_ratio(lmk: np.ndarray) -> np.ndarray:
     return calculate_distance_ratio(lmk, 90, 102, 48, 66)
 
 
+def calc_eye_close_ratio_animal(lmk: np.ndarray, target_eye_ratio: np.ndarray = None) -> np.ndarray:
+    """
+    Animal version of calc_eye_close_ratio for 9-point XPose animal_face landmarks.
+
+    Indices (animal_face schema):
+      0: right eye right corner
+      1: right eye left corner
+      2: left eye right corner
+      3: left eye left corner
+      4: nose tip
+      5..8: lip points
+
+    Since XPose animal_face has NO vertical lid keypoints, we cannot directly
+    measure eye-closure geometry. Instead, we return a stable per-eye reference
+    ratio: eye_width / inter-eye-distance. This serves as the source-side scale
+    anchor for the retargeting model; the actual closure animation is driven by
+    the (human) driving video's eye-close ratio, which IS measurable.
+
+    Output shape matches the human version: (B, 2) or (B, 3) if target_eye_ratio given.
+    """
+    eps = 1e-6
+    # Per-eye horizontal extent
+    right_eye_width = np.linalg.norm(lmk[:, 0] - lmk[:, 1], axis=1, keepdims=True)
+    left_eye_width  = np.linalg.norm(lmk[:, 2] - lmk[:, 3], axis=1, keepdims=True)
+    # Inter-eye reference distance (midpoint to midpoint)
+    right_eye_mid = (lmk[:, 0] + lmk[:, 1]) / 2.0
+    left_eye_mid  = (lmk[:, 2] + lmk[:, 3]) / 2.0
+    inter_eye_distance = np.linalg.norm(right_eye_mid - left_eye_mid, axis=1, keepdims=True)
+
+    lefteye_close_ratio  = left_eye_width  / (inter_eye_distance + eps)
+    righteye_close_ratio = right_eye_width / (inter_eye_distance + eps)
+
+    if target_eye_ratio is not None:
+        return np.concatenate([lefteye_close_ratio, righteye_close_ratio, target_eye_ratio], axis=1)
+    else:
+        return np.concatenate([lefteye_close_ratio, righteye_close_ratio], axis=1)
+
+
+def calc_lip_close_ratio_animal(lmk: np.ndarray) -> np.ndarray:
+    """
+    Animal version of calc_lip_close_ratio for 9-point XPose animal_face landmarks.
+
+    Indices used:
+      5: lip right corner
+      6: lip left corner
+      7: upper lip
+      8: lower lip
+
+    Vertical lip aperture (upper-lower) over horizontal lip width (right-left)
+    is a direct analogue of the human version.
+    """
+    eps = 1e-6
+    lip_height = np.linalg.norm(lmk[:, 7] - lmk[:, 8], axis=1, keepdims=True)
+    lip_width  = np.linalg.norm(lmk[:, 5] - lmk[:, 6], axis=1, keepdims=True)
+    return lip_height / (lip_width + eps)
+
+
 def _transform_img(img, M, dsize, flags=cv2.INTER_LINEAR, borderMode=None):
     """ conduct similarity or affine transformation to the image, do not do border operation!
     img:
