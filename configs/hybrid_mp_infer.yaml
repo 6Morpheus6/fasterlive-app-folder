@@ -3,8 +3,9 @@
 # Use this after running build_trt.bat
 models:
   warping_spade:
-    name: "WarpingSpadePyTorchModel"
-    predict_type: "pt"
+    name: "WarpingSpadeModel"
+    predict_type: "ort"
+    model_path: "./checkpoints/liveportrait_onnx/warping_spade.onnx"
   motion_extractor:
     name: "MotionExtractorModel"
     predict_type: "trt"
