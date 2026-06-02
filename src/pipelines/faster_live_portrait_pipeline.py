@@ -66,11 +66,21 @@ class FasterLivePortraitPipeline:
             print("load Human Model >>>")
             self.is_animal = False
             self.model_dict = {}
-            for model_name in self.cfg.models:
+            for model_name, model_config in self.cfg.models.items():
                 print(f"loading model: {model_name}")
-                print(self.cfg.models[model_name])
-                self.model_dict[model_name] = getattr(models, self.cfg.models[model_name]["name"])(
-                    **self.cfg.models[model_name])
+                
+                if model_config is None:
+                    if model_name == "warping_spade":
+                        model_config = {
+                            "name": "WarpingSpadeModel",
+                            "predict_type": "onnx",
+                            "model_path": "./checkpoints/liveportrait_onnx/warping_spade.onnx"
+                        }
+                    else:
+                        continue
+
+                print(model_config)
+                self.model_dict[model_name] = getattr(models, model_config["name"])(**model_config)
         else:
             print("load Animal Model >>>")
             self.is_animal = True
@@ -81,14 +91,15 @@ class FasterLivePortraitPipeline:
             for model_name in self.cfg.animal_models:
                 print(f"loading model: {model_name}")
                 print(self.cfg.animal_models[model_name])
-                if checkpoint_dir is None and isinstance(self.cfg.animal_models[model_name].model_path, str):
+                if checkpoint_dir is None and isinstance(self.cfg.animal_models[model_name].model_path, str) and self.cfg.animal_models[model_name].model_path.strip() != "":
                     checkpoint_dir = os.path.dirname(self.cfg.animal_models[model_name].model_path)
                 self.model_dict[model_name] = getattr(models, self.cfg.animal_models[model_name]["name"])(
                     **self.cfg.animal_models[model_name])
 
             xpose_config_file_path: str = make_abs_path("models/XPose/config_model/UniPose_SwinT.py")
-            xpose_ckpt_path: str = os.path.join(checkpoint_dir, "xpose.pth")
-            xpose_embedding_cache_path: str = os.path.join(checkpoint_dir, 'clip_embedding')
+            checkpoints_base = os.path.dirname(checkpoint_dir)
+            xpose_ckpt_path: str = os.path.join(checkpoints_base, "liveportrait_animal_onnx", "xpose.pth")
+            xpose_embedding_cache_path: str = os.path.join(checkpoints_base, "liveportrait_animal_onnx", "clip_embedding")
             self.model_dict["xpose"] = XPoseRunner(model_config_path=xpose_config_file_path,
                                                    model_checkpoint_path=xpose_ckpt_path,
                                                    embeddings_cache_path=xpose_embedding_cache_path,

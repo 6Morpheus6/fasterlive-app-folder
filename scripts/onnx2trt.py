@@ -147,7 +147,7 @@ class EngineBuilder:
         Parse the ONNX graph and create the corresponding TensorRT network definition.
         :param onnx_path: The path to the ONNX graph to load.
         """
-        network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+        network_flags = 0
         self.network = self.builder.create_network(network_flags)
         self.parser = trt.OnnxParser(self.network, self.trt_logger)
 
@@ -186,10 +186,7 @@ class EngineBuilder:
         log.info("Building {} Engine in {}".format(precision, engine_path))
 
         if precision == "fp16":
-            if not self.builder.platform_has_fast_fp16:
-                log.warning("FP16 is not supported natively on this platform/device")
-            else:
-                self.config.set_flag(trt.BuilderFlag.FP16)
+            self.config.flags |= (1 << 0)
 
         # TensorRT 10: build_engine() is replaced by build_serialized_network() which
         # returns the serialized engine bytes directly (no engine object needed).
