@@ -28,17 +28,6 @@ if platform.system().lower() == "windows":
 import copy
 import traceback
 import argparse
-
-# Inject the virtual environment Scripts folder into the DLL search path so TensorRT can find nvinfer.dll
-env_scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'env', 'Scripts')
-if os.path.exists(env_scripts):
-    os.environ['PATH'] = env_scripts + os.pathsep + os.environ.get('PATH', '')
-    if hasattr(os, 'add_dll_directory'):
-        try:
-            os.add_dll_directory(env_scripts)
-        except Exception:
-            pass
-
 import time
 import cv2
 import numpy as np
@@ -59,7 +48,7 @@ vcam_streamer = VirtualCameraStreamer(width=640, height=480, fps=30)
 
 # Parse command line args
 parser = argparse.ArgumentParser(description='Faster Live Portrait Camera WebUI')
-parser.add_argument('--mode', required=False, type=str, default="onnx", choices=["onnx", "trt", "pytorch"])
+parser.add_argument('--mode', required=False, type=str, default="pytorch", choices=["onnx", "trt", "pytorch"])
 parser.add_argument('--use_mp', action='store_true', help='use mediapipe or not')
 parser.add_argument('--host_ip', type=str, default="127.0.0.1", help="host ip")
 parser.add_argument('--port', type=int, default=9871, help="server port")
@@ -108,24 +97,24 @@ def init_pipeline(mode, use_mp, is_animal):
 # Initialize the pipeline once at startup
 init_pipeline(current_mode, current_use_mp, current_is_animal)
 
-def change_pipeline_settings(mode, use_mp, is_animal):
+def change_pipeline_settings(is_animal):
     global pipeline
     try:
         # Keep track of the loaded source image path to reload it automatically
         saved_source_path = pipeline.source_path if pipeline else None
         
         # Re-initialize the pipeline
-        init_pipeline(mode, use_mp, is_animal)
+        init_pipeline(current_mode, False, is_animal)
         
         # Re-load the source image if it was previously set
         if saved_source_path and os.path.exists(saved_source_path):
             ret = pipeline.prepare_source(saved_source_path, realtime=True)
             if ret:
-                return f"✅ Pipeline re-initialized successfully in {mode.upper()} mode! (is_animal={is_animal}, use_mp={use_mp}). Source image auto-loaded successfully."
+                return f"✅ Pipeline re-initialized successfully in (is_animal={is_animal}). Source image auto-loaded successfully."
             else:
-                return f"⚠️ Pipeline re-initialized successfully in {mode.upper()} mode, but face detection failed on the previously loaded source image."
+                return f"⚠️ Pipeline re-initialized successfully but face detection failed on the previously loaded source image."
         else:
-            return f"✅ Pipeline re-initialized successfully in {mode.upper()} mode! (is_animal={is_animal}, use_mp={use_mp}). Upload a source image to begin face mapping."
+            return f"✅ Pipeline re-initialized successfully in (is_animal={is_animal}). Upload a source image to begin face mapping."
     except Exception as e:
         traceback.print_exc()
         return f"❌ Error re-initializing pipeline: {str(e)}"
@@ -469,13 +458,14 @@ with gr.Blocks() as demo:
                     vcam_h = gr.Dropdown(choices=["240", "512", "480", "720"], value="480", label="Stream Height")
                     vcam_fps = gr.Slider(minimum=15, maximum=60, step=5, value=30, label="Target FPS")
                     apply_vcam_settings_btn = gr.Button("Apply Resolution Settings")
-                    
-            with gr.Accordion("⚙️ Backend Engine Configs (Requires Reload)", open=False):
-                mode_radio = gr.Radio(choices=["onnx", "trt", "pytorch"], value=current_mode, label="Model Engine Mode")
-                use_mp_checkbox = gr.Checkbox(value=current_use_mp, label="Use MediaPipe Face Detector")
+
+            gr.Markdown("### ⚡ Step 3: Apply Backend Settings")
+            gr.Markdown("##### Check *Use Animal Avatar Pipeline* if you uploaded an animal avatar")
+
+            with gr.Accordion("⚙️ Backend Engine Config", open=True):
                 animal_checkbox = gr.Checkbox(value=current_is_animal, label="Use Animal Avatar Pipeline")
                 apply_settings_btn = gr.Button("Apply Backend Settings", variant="secondary", elem_classes=["btn-accent"])
-                
+
         with gr.Column(scale=5, elem_classes=["panel-box"]):
             gr.Markdown("### 🎥 Live Video Feeds")
             
@@ -498,7 +488,7 @@ with gr.Blocks() as demo:
     
     apply_settings_btn.click(
         fn=change_pipeline_settings,
-        inputs=[mode_radio, use_mp_checkbox, animal_checkbox],
+        inputs=[animal_checkbox],
         outputs=[status_output]
     )
     
