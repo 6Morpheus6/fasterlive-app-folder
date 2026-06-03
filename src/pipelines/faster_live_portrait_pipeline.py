@@ -503,7 +503,7 @@ class FasterLivePortraitPipeline:
 
                 # Additive application (preserves driver pose)
                 if eyes_delta is not None:
-                    x_d_i_new = x_d_i_new + eyes_delta.reshape(-1, x_s.shape[1], 3)
+                    x_d_i_new = x_d_i_new + 1.3 * eyes_delta.reshape(-1, x_s.shape[1], 3)
                 if lip_delta is not None:
                     x_d_i_new = x_d_i_new + lip_delta.reshape(-1, x_s.shape[1], 3)
 
