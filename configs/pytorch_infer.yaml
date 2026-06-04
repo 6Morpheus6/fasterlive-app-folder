@@ -105,7 +105,7 @@ infer_params:
   driving_smooth_observation_variance: 1e-7 # smooth strength scalar for the animated video when the input is a source video, the larger the number, the smoother the animated video; too much smoothness would result in loss of motion accuracy
   anchor_frame: 0 # TO IMPLEMENT
   mask_crop_path: "./assets/mask_template.png"
-  driving_multiplier: 1.3
+  driving_multiplier: 1
 
   cfg_mode: "incremental"
   cfg_scale: 1.2

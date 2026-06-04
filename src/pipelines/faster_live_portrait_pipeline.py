@@ -456,25 +456,24 @@ class FasterLivePortraitPipeline:
                 else:
                     eyes_delta, lip_delta = None, None
                     if self.cfg.infer_params.flag_eye_retargeting:
-                        c_d_eyes_i = input_eye_ratio
+                        # input_eye_ratio is shape (1, 2) = [left_close, right_close].
+                        # calc_combined_eye_ratio expects a single scalar driver value;
+                        # take the mean of both eyes (matches the is_source_video branch above).
+                        c_d_eyes_i = [float(np.mean(input_eye_ratio))]
                         combined_eye_ratio_tensor = self.calc_combined_eye_ratio(c_d_eyes_i,
-                                                                                 source_lmk)
-                        # ∆_eyes,i = R_eyes(x_s; c_s,eyes, c_d,eyes,i)
+                                                                                source_lmk)
                         eyes_delta = self.retarget_eye(x_s, combined_eye_ratio_tensor)
                     if self.cfg.infer_params.flag_lip_retargeting:
-                        c_d_lip_i = input_lip_ratio
+                        # input_lip_ratio is shape (1, 1); unwrap to scalar list for
+                        # consistency with calc_combined_lip_ratio's reshape(1,1).
+                        c_d_lip_i = [float(input_lip_ratio.flatten()[0])]
                         combined_lip_ratio_tensor = self.calc_combined_lip_ratio(c_d_lip_i, source_lmk)
-                        # ∆_lip,i = R_lip(x_s; c_s,lip, c_d,lip,i)
                         lip_delta = self.retarget_lip(x_s, combined_lip_ratio_tensor)
 
-                    if self.cfg.infer_params.flag_relative_motion:  # use x_s
-                        x_d_i_new = x_s + \
-                                    (eyes_delta.reshape(-1, x_s.shape[1], 3) if eyes_delta is not None else 0) + \
-                                    (lip_delta.reshape(-1, x_s.shape[1], 3) if lip_delta is not None else 0)
-                    else:  # use x_d,i
-                        x_d_i_new = x_d_i_new + \
-                                    (eyes_delta.reshape(-1, x_s.shape[1], 3) if eyes_delta is not None else 0) + \
-                                    (lip_delta.reshape(-1, x_s.shape[1], 3) if lip_delta is not None else 0)
+                    if eyes_delta is not None:
+                        x_d_i_new = x_d_i_new + eyes_delta.reshape(-1, x_s.shape[1], 3)
+                    if lip_delta is not None:
+                        x_d_i_new = x_d_i_new + lip_delta.reshape(-1, x_s.shape[1], 3)
 
                     if self.cfg.infer_params.flag_stitching:
                         x_d_i_new = self.stitching(x_s, x_d_i_new)
