@@ -431,15 +431,24 @@ with gr.Blocks() as demo:
         
     with gr.Row():
         with gr.Column(scale=4, elem_classes=["panel-box"]):
-            gr.Markdown("### 🖼️ Step 1: Prepare Avatar")
+            gr.Markdown("#### 🖼️ Prepare Avatar")
             source_image_input = gr.Image(type="filepath", label="Upload Avatar Picture")
             status_output = gr.Markdown("ℹ️ Upload a source image above to initialize face tracking.", elem_classes=["status-box"])
-            
-            gr.Markdown("### ⚡ Step 2: Calibrate & Reset")
+
+            gr.Markdown("#### ⚙️ Apply Backend Settings")
+            gr.Markdown("""
+                        Default: Human Mode  
+                        Check **Use Animal Avatar Pipeline** and Apply Backend Settings **before** you upload an animal avatar
+                        """)
+
+            with gr.Accordion("Backend Engine Config", open=True):
+                animal_checkbox = gr.Checkbox(value=current_is_animal, label="Use Animal Avatar Pipeline")
+                apply_settings_btn = gr.Button("Apply Backend Settings", variant="secondary", elem_classes=["btn-accent"])
+
             calibrate_btn = gr.Button("🔄 Calibrate Camera Pose", variant="primary", elem_classes=["btn-primary"])
             
-            with gr.Accordion("🚀 Real-Time Speed & Latency Optimizations", open=True):
-                pasteback_checkbox = gr.Checkbox(value=False, label="Pasteback (Disable for HUGE speed up!)")
+            with gr.Accordion("🚀 Real-Time Speed & Latency Optimizations", open=False):
+                pasteback_checkbox = gr.Checkbox(value=False, label="Pasteback (Slower but fixes image rotation!)")
                 stitching_checkbox = gr.Checkbox(value=True, label="Enable Stitching")
                 relative_motion_checkbox = gr.Checkbox(value=True, label="Enable Relative Motion")
                 downsample_slider = gr.Slider(minimum=1.0, maximum=3.0, step=0.1, value=1.5, label="Webcam Downsample Scale (Reduces camera load)")
@@ -449,7 +458,7 @@ with gr.Blocks() as demo:
                 det_thresh_slider = gr.Slider(minimum=0.1, maximum=1.0, step=0.05, value=0.5, label="Face Detection Threshold (Lower = Less picky)")
                 smooth_factor_slider = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, value=0.3, label="Tracking Smooth Factor / Beta (Lower = More smoothing)")
                 
-            with gr.Accordion("🎥 Direct Virtual Camera Streamer", open=True):
+            with gr.Accordion("🎥 Direct Virtual Camera Streamer", open=False):
                 enable_vcam_checkbox = gr.Checkbox(value=False, label="⚡ Enable Direct Virtual Webcam Streaming")
                 vcam_device = gr.Dropdown(choices=["Unity Video Capture", "OBS Virtual Camera"], value="Unity Video Capture", label="Select Virtual Camera Device")
                 vcam_status = gr.Textbox(value="⚪ Virtual Camera IDLE", label="Driver Connection Status", interactive=False)
@@ -459,19 +468,33 @@ with gr.Blocks() as demo:
                     vcam_fps = gr.Slider(minimum=15, maximum=60, step=5, value=30, label="Target FPS")
                     apply_vcam_settings_btn = gr.Button("Apply Resolution Settings")
 
-            gr.Markdown("### ⚡ Step 3: Apply Backend Settings")
-            gr.Markdown("##### Check *Use Animal Avatar Pipeline* if you uploaded an animal avatar")
-
-            with gr.Accordion("⚙️ Backend Engine Config", open=True):
-                animal_checkbox = gr.Checkbox(value=current_is_animal, label="Use Animal Avatar Pipeline")
-                apply_settings_btn = gr.Button("Apply Backend Settings", variant="secondary", elem_classes=["btn-accent"])
-
         with gr.Column(scale=5, elem_classes=["panel-box"]):
             gr.Markdown("### 🎥 Live Video Feeds")
             
             with gr.Row():
                 webcam_input = gr.Image(sources=["webcam"], type="numpy", label="Webcam Feed", streaming=True, width=256, height=256)
                 processed_output = gr.Image(type="numpy", label="Processed Live Avatar")
+
+            with gr.Row():
+                gr.Markdown("""
+                ### Human Mode
+                1. Plug in your Camera
+                2. Upload an Avatar
+                3. Click your Webcam Feed (Click to Acess Webcam)
+                4. Optional: Check **Enable Direct Virtual Webcam Streaming** to use the Processed Live Avatar in a voice chat  
+                   *Requires Streaming Installation. (After installing the Streaming Service it is necessary to restart your voice chat app)*
+                5. Select the virtual Camera in your voice chat app
+                            
+                ### Animal Mode
+                1. Plug in your Camera
+                2. Check **Use Animal Avatar Pipeline**
+                3. Apply Backend Settings
+                4. Upload an image of an animal (cats and dogs work best)
+                5. Click your Webcam Feed (Click to Acess Webcam)
+                6. Optional: Check **Enable Direct Virtual Webcam Streaming** to use the Processed Live Avatar in a voice chat  
+                   *Requires Streaming Installation. (After installing the Streaming Service it is necessary to restart your voice chat app)*
+                7. Select the virtual Camera in your voice chat app
+                """)
                 
     # Event Bindings
     source_image_input.change(
